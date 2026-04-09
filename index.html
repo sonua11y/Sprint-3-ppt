@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGO Welfare Programs – Resource Allocation Analysis</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        ngoblue: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e3a5f',900:'#0f2440',950:'#081629' },
+        ngogreen: { 50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b' }
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        serif: ['Playfair Display', 'serif']
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { overflow:hidden; height:100%; font-family:'Inter',sans-serif; background:#081629; }
+
+  .slide { display:none; width:100%; height:100vh; position:absolute; top:0; left:0; }
+  .slide.active { display:flex; }
+
+  .glass { background:rgba(255,255,255,0.06); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.1); }
+  .glass-light { background:rgba(255,255,255,0.08); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.12); }
+
+  .gradient-text { background:linear-gradient(135deg,#60a5fa,#34d399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .gradient-border { border-image:linear-gradient(135deg,#3b82f6,#10b981) 1; }
+
+  .card-hover { transition:all 0.3s ease; }
+  .card-hover:hover { transform:translateY(-4px); box-shadow:0 12px 40px rgba(59,130,246,0.15); }
+
+  .progress-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.2); transition:all 0.3s ease; cursor:pointer; }
+  .progress-dot.active { background:linear-gradient(135deg,#3b82f6,#10b981); box-shadow:0 0 12px rgba(59,130,246,0.5); width:28px; border-radius:5px; }
+
+  .notes-panel { position:fixed; bottom:0; left:0; right:0; max-height:0; overflow:hidden; transition:max-height 0.4s ease; z-index:100; }
+  .notes-panel.open { max-height:200px; }
+
+  .fade-in { animation:fadeIn 0.5s ease forwards; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  .slide-number { position:absolute; bottom:24px; right:32px; font-size:13px; color:rgba(255,255,255,0.3); font-weight:500; }
+
+  canvas { max-height:100% !important; }
+
+  .metric-card { position:relative; overflow:hidden; }
+  .metric-card::before { content:''; position:absolute; top:-50%; right:-50%; width:100%; height:100%; background:radial-gradient(circle,rgba(59,130,246,0.08),transparent 70%); pointer-events:none; }
+
+  @keyframes pulse-glow { 0%,100%{box-shadow:0 0 20px rgba(59,130,246,0.2)} 50%{box-shadow:0 0 40px rgba(16,185,129,0.3)} }
+  .pulse-glow { animation:pulse-glow 3s ease-in-out infinite; }
+
+  .icon-box { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<!-- NAVIGATION -->
+<div class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4" style="background:linear-gradient(180deg,rgba(8,22,41,0.95),transparent);">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#3b82f6,#10b981);">
+      <iconify-icon icon="lucide:bar-chart-3" width="16" style="color:#fff"></iconify-icon>
+    </div>
+    <span class="text-white/70 text-sm font-medium">NGO Resource Analysis</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <button onclick="toggleNotes()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-white/60 hover:text-white/90 transition-colors" style="background:rgba(255,255,255,0.06);">
+      <iconify-icon icon="lucide:message-square" width="14"></iconify-icon>
+      <span class="hidden sm:inline">Speaker Notes</span>
+    </button>
+    <button onclick="toggleFullscreen()" class="p-2 rounded-lg text-white/60 hover:text-white/90 transition-colors" style="background:rgba(255,255,255,0.06);">
+      <iconify-icon icon="lucide:maximize-2" width="16"></iconify-icon>
+    </button>
+  </div>
+</div>
+
+<!-- PROGRESS DOTS -->
+<div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+  <div class="progress-dot active" onclick="goToSlide(0)"></div>
+  <div class="progress-dot" onclick="goToSlide(1)"></div>
+  <div class="progress-dot" onclick="goToSlide(2)"></div>
+  <div class="progress-dot" onclick="goToSlide(3)"></div>
+  <div class="progress-dot" onclick="goToSlide(4)"></div>
+  <div class="progress-dot" onclick="goToSlide(5)"></div>
+</div>
+
+<!-- NAV ARROWS -->
+<button onclick="prevSlide()" class="fixed left-4 top-1/2 -translate-y-1/2 z-50 w-10 h-10 rounded-full flex items-center justify-center text-white/40 hover:text-white/90 hover:bg-white/10 transition-all" style="background:rgba(255,255,255,0.05);">
+  <iconify-icon icon="lucide:chevron-left" width="20"></iconify-icon>
+</button>
+<button onclick="nextSlide()" class="fixed right-4 top-1/2 -translate-y-1/2 z-50 w-10 h-10 rounded-full flex items-center justify-center text-white/40 hover:text-white/90 hover:bg-white/10 transition-all" style="background:rgba(255,255,255,0.05);">
+  <iconify-icon icon="lucide:chevron-right" width="20"></iconify-icon>
+</button>
+
+<!-- ===================== SLIDE 1: TITLE ===================== -->
+<div class="slide active" id="slide-0">
+  <div class="w-full h-full flex flex-col items-center justify-center relative px-6" style="background:radial-gradient(ellipse at 30% 20%, rgba(37,99,235,0.15), transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(16,185,129,0.12), transparent 50%), #081629;">
+    <!-- Decorative elements -->
+    <div class="absolute top-20 left-20 w-64 h-64 rounded-full opacity-20" style="background:radial-gradient(circle,rgba(59,130,246,0.3),transparent); filter:blur(60px);"></div>
+    <div class="absolute bottom-20 right-20 w-48 h-48 rounded-full opacity-20" style="background:radial-gradient(circle,rgba(16,185,129,0.3),transparent); filter:blur(60px);"></div>
+
+    <div class="fade-in text-center max-w-4xl relative z-10">
+      <!-- Badge -->
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 text-sm font-medium" style="background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.25); color:#60a5fa;">
+        <iconify-icon icon="lucide:heart-handshake" width="16"></iconify-icon>
+        Data Science for Social Good
+      </div>
+
+      <h1 class="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight mb-6">
+        Analyzing NGO Welfare Programs<br>
+        <span class="gradient-text">for Optimal Resource Allocation</span>
+      </h1>
+
+      <p class="text-base sm:text-lg text-white/50 max-w-2xl mx-auto mb-10 font-light leading-relaxed">
+        Leveraging data-driven insights to help NGOs evaluate programs, maximize impact per dollar, and make smarter funding decisions.
+      </p>
+
+      <div class="flex flex-wrap items-center justify-center gap-4 mb-12">
+        <div class="glass rounded-xl px-5 py-3 flex items-center gap-3">
+          <iconify-icon icon="lucide:database" width="18" style="color:#60a5fa"></iconify-icon>
+          <span class="text-white/70 text-sm font-medium">Data Analytics</span>
+        </div>
+        <div class="glass rounded-xl px-5 py-3 flex items-center gap-3">
+          <iconify-icon icon="lucide:pie-chart" width="18" style="color:#34d399"></iconify-icon>
+          <span class="text-white/70 text-sm font-medium">Visualization</span>
+        </div>
+        <div class="glass rounded-xl px-5 py-3 flex items-center gap-3">
+          <iconify-icon icon="lucide:target" width="18" style="color:#f59e0b"></iconify-icon>
+          <span class="text-white/70 text-sm font-medium">Impact Optimization</span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-center gap-6 text-xs text-white/30">
+        <span class="flex items-center gap-1.5"><iconify-icon icon="lucide:user" width="13"></iconify-icon> Team Presentation</span>
+        <span class="w-1 h-1 rounded-full bg-white/20"></span>
+        <span class="flex items-center gap-1.5"><iconify-icon icon="lucide:calendar" width="13"></iconify-icon> 2025</span>
+        <span class="w-1 h-1 rounded-full bg-white/20"></span>
+        <span class="flex items-center gap-1.5"><iconify-icon icon="lucide:award" width="13"></iconify-icon> Hackathon / College Project</span>
+      </div>
+    </div>
+
+    <div class="slide-number">1 / 6</div>
+  </div>
+</div>
+
+<!-- ===================== SLIDE 2: PROBLEM & OBJECTIVE ===================== -->
+<div class="slide" id="slide-1">
+  <div class="w-full h-full flex flex-col lg:flex-row" style="background:radial-gradient(ellipse at 80% 20%, rgba(239,68,68,0.08), transparent 50%), radial-gradient(ellipse at 20% 80%, rgba(59,130,246,0.1), transparent 50%), #081629;">
+    <!-- LEFT: Problem -->
+    <div class="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-16 py-12">
+      <div class="fade-in">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="icon-box" style="background:rgba(239,68,68,0.12);">
+            <iconify-icon icon="lucide:alert-triangle" width="20" style="color:#f87171"></iconify-icon>
+          </div>
+          <span class="text-red-400/80 text-xs font-semibold uppercase tracking-widest">The Problem</span>
+        </div>
+        <h2 class="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-6 tracking-tight">
+          Why NGOs Struggle with<br>Resource Allocation
+        </h2>
+        <div class="space-y-4">
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(239,68,68,0.15);">
+              <iconify-icon icon="lucide:x" width="12" style="color:#f87171"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Guesswork over Data</p>
+              <p class="text-white/40 text-xs mt-0.5">Funding decisions based on intuition, not evidence</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(239,68,68,0.15);">
+              <iconify-icon icon="lucide:x" width="12" style="color:#f87171"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Uneven Impact Distribution</p>
+              <p class="text-white/40 text-xs mt-0.5">Some programs overfunded, others critically underfunded</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(239,68,68,0.15);">
+              <iconify-icon icon="lucide:x" width="12" style="color:#f87171"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">No Standardized Metrics</p>
+              <p class="text-white/40 text-xs mt-0.5">Lack of uniform impact scoring across programs</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(239,68,68,0.15);">
+              <iconify-icon icon="lucide:x" width="12" style="color:#f87171"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Donor Accountability Gaps</p>
+              <p class="text-white/40 text-xs mt-0.5">Hard to prove ROI to stakeholders and donors</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="hidden lg:block w-px" style="background:linear-gradient(180deg,transparent,rgba(255,255,255,0.1),transparent);"></div>
+
+    <!-- RIGHT: Objective -->
+    <div class="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-16 py-12" style="background:rgba(16,185,129,0.03);">
+      <div class="fade-in">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="icon-box" style="background:rgba(16,185,129,0.12);">
+            <iconify-icon icon="lucide:target" width="20" style="color:#34d399"></iconify-icon>
+          </div>
+          <span class="text-emerald-400/80 text-xs font-semibold uppercase tracking-widest">Our Objective</span>
+        </div>
+        <h2 class="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-6 tracking-tight">
+          Data-Driven Impact<br>Maximization
+        </h2>
+        <div class="space-y-4">
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(16,185,129,0.15);">
+              <iconify-icon icon="lucide:check" width="12" style="color:#34d399"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Evaluate Programs Objectively</p>
+              <p class="text-white/40 text-xs mt-0.5">Score programs on funds, beneficiaries & impact</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(16,185,129,0.15);">
+              <iconify-icon icon="lucide:check" width="12" style="color:#34d399"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Calculate Efficiency Ratios</p>
+              <p class="text-white/40 text-xs mt-0.5">Impact per dollar — find true ROI of each program</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(16,185,129,0.15);">
+              <iconify-icon icon="lucide:check" width="12" style="color:#34d399"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Visualize for Clarity</p>
+              <p class="text-white/40 text-xs mt-0.5">Charts that tell the story at a glance</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style="background:rgba(16,185,129,0.15);">
+              <iconify-icon icon="lucide:check" width="12" style="color:#34d399"></iconify-icon>
+            </div>
+            <div>
+              <p class="text-white/80 text-sm font-medium">Rank & Recommend</p>
+              <p class="text-white/40 text-xs mt-0.5">Identify top performers and underperformers</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-number">2 / 6</div>
+  </div>
+</div>
+
+<!-- ===================== SLIDE 3: DATA & METHODOLOGY ===================== -->
+<div class="slide" id="slide-2">
+  <div class="w-full h-full flex flex-col" style="background:radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.08), transparent 60%), #081629;">
+    <div class="flex-1 flex flex-col justify-start px-6 sm:px-12 lg:px-20 pt-24 pb-16 overflow-y-auto">
+      <div class="fade-in max-w-6xl mx-auto w-full">
+        <div class="text-center mb-10">
+          <span class="text-blue-400/70 text-xs font-semibold uppercase tracking-widest">Methodology</span>
+          <h2 class="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-white mt-2 tracking-tight">Data Overview & Preparation</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <!-- Dataset -->
+          <div class="glass rounded-2xl p-6 card-hover">
+            <div class="flex items-center gap-3 mb-5">
+              <div class="icon-box" style="background:rgba(59,130,246,0.12);">
+                <iconify-icon icon="lucide:table-2" width="20" style="color:#60a5fa"></iconify-icon>
+              </div>
+              <h3 class="text-white font-semibold text-base">Dataset Features</h3>
+            </div>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(255,255,255,0.04);">
+                <span class="text-white/60 text-sm flex items-center gap-2"><iconify-icon icon="lucide:file-text" width="14" style="color:#60a5fa"></iconify-icon> Program Name</span>
+                <span class="text-blue-400/60 text-xs">Categorical</span>
+              </div>
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(255,255,255,0.04);">
+                <span class="text-white/60 text-sm flex items-center gap-2"><iconify-icon icon="lucide:dollar-sign" width="14" style="color:#34d399"></iconify-icon> Funds Allocated</span>
+                <span class="text-emerald-400/60 text-xs">Numeric ($)</span>
+              </div>
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(255,255,255,0.04);">
+                <span class="text-white/60 text-sm flex items-center gap-2"><iconify-icon icon="lucide:users" width="14" style="color:#f59e0b"></iconify-icon> Beneficiaries</span>
+                <span class="text-amber-400/60 text-xs">Numeric</span>
+              </div>
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(255,255,255,0.04);">
+                <span class="text-white/60 text-sm flex items-center gap-2"><iconify-icon icon="lucide:star" width="14" style="color:#a78bfa"></iconify-icon> Impact Score</span>
+                <span class="text-purple-400/60 text-xs">Scale (1–10)</span>
+              </div>
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(255,255,255,0.04);">
+                <span class="text-white/60 text-sm flex items-center gap-2"><iconify-icon icon="lucide:map-pin" width="14" style="color:#fb7185"></iconify-icon> Region</span>
+                <span class="text-rose-400/60 text-xs">Categorical</span>
+              </div>
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background:rgba(255,255,255,0.04);">
+                <span class="text-white/60 text-sm flex items-center gap-2"><iconify-icon icon="lucide:calendar" width="14" style="color:#38bdf8"></iconify-icon> Date</span>
+                <span class="text-sky-400/60 text-xs">Datetime</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Key Metrics -->
+          <div class="glass rounded-2xl p-6 card-hover">
+            <div class="flex items-center gap-3 mb-5">
+              <div class="icon-box" style="background:rgba(16,185,129,0.12);">
+                <iconify-icon icon="lucide:calculator" width="20" style="color:#34d399"></iconify-icon>
+              </div>
+              <h3 class="text-white font-semibold text-base">Key Metrics</h3>
+            </div>
+            <div class="space-y-4">
+              <div class="p-4 rounded-xl" style="background:linear-gradient(135deg,rgba(59,130,246,0.08),rgba(16,185,129,0.08)); border:1px solid rgba(59,130,246,0.15);">
+                <p class="text-white font-semibold text-sm mb-1">Impact Score</p>
+                <p class="text-white/40 text-xs leading-relaxed">Composite rating (1–10) based on outcome quality, reach depth, and sustainability of program results</p>
+              </div>
+              <div class="p-4 rounded-xl" style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(245,158,11,0.08)); border:1px solid rgba(16,185,129,0.15);">
+                <p class="text-white font-semibold text-sm mb-1">Efficiency = Impact Score ÷ Funds</p>
+                <p class="text-white/40 text-xs leading-relaxed">Measures impact delivered per dollar spent — the true ROI metric for program comparison</p>
+              </div>
+              <div class="p-4 rounded-xl" style="background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(239,68,68,0.08)); border:1px solid rgba(245,158,11,0.15);">
+                <p class="text-white font-semibold text-sm mb-1">Cost per Beneficiary</p>
+                <p class="text-white/40 text-xs leading-relaxed">Total funds ÷ number of beneficiaries — helps assess scale efficiency</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Cleaning Pipeline -->
+        <div class="glass rounded-2xl p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="icon-box" style="background:rgba(168,85,247,0.12);">
+              <iconify-icon icon="lucide:filter" width="20" style="color:#a78bfa"></iconify-icon>
+            </div>
+            <h3 class="text-white font-semibold text-base">Data Cleaning Pipeline</h3>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70" style="background:rgba(255,255,255,0.05);">
+              <iconify-icon icon="lucide:scan-search" width="15" style="color:#a78bfa"></iconify-icon> Missing Value Detection
+            </div>
+            <iconify-icon icon="lucide:arrow-right" width="16" style="color:rgba(255,255,255,0.2)"></iconify-icon>
+            <div class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70" style="background:rgba(255,255,255,0.05);">
+              <iconify-icon icon="lucide:eraser" width="15" style="color:#a78bfa"></iconify-icon> Duplicate Removal
+            </div>
+            <iconify-icon icon="lucide:arrow-right" width="16" style="color:rgba(255,255,255,0.2)"></iconify-icon>
+            <div class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70" style="background:rgba(255,255,255,0.05);">
+              <iconify-icon icon="lucide:type" width="15" style="color:#a78bfa"></iconify-icon> Type Conversion
+            </div>
+            <iconify-icon icon="lucide:arrow-right" width="16" style="color:rgba(255,255,255,0.2)"></iconify-icon>
+            <div class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70" style="background:rgba(255,255,255,0.05);">
+              <iconify-icon icon="lucide:git-branch" width="15" style="color:#a78bfa"></iconify-icon> Outlier Treatment
+            </div>
+            <iconify-icon icon="lucide:arrow-right" width="16" style="color:rgba(255,255,255,0.2)"></iconify-icon>
+            <div class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70" style="background:rgba(255,255,255,0.05);">
+              <iconify-icon icon="lucide:sigma" width="15" style="color:#a78bfa"></iconify-icon> Derived Metrics
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-number">3 / 6</div>
+  </div>
+</div>
+
+<!-- ===================== SLIDE 4: VISUALIZATIONS ===================== -->
+<div class="slide" id="slide-3">
+  <div class="w-full h-full flex flex-col" style="background:radial-gradient(ellipse at 30% 50%, rgba(59,130,246,0.06), transparent 50%), #081629;">
+    <div class="flex-1 px-6 sm:px-10 lg:px-14 py-16 overflow-y-auto">
+      <div class="fade-in max-w-7xl mx-auto w-full">
+        <div class="text-center mb-8">
+          <span class="text-blue-400/70 text-xs font-semibold uppercase tracking-widest">Data Storytelling</span>
+          <h2 class="font-serif text-2xl sm:text-3xl font-bold text-white mt-2 tracking-tight">Visualizations & Trends</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Histogram -->
+          <div class="glass rounded-2xl p-5 card-hover">
+            <div class="flex items-center gap-2 mb-3">
+              <iconify-icon icon="lucide:bar-chart-horizontal" width="16" style="color:#60a5fa"></iconify-icon>
+              <h4 class="text-white/80 text-sm font-semibold">Funds Distribution (Histogram)</h4>
+            </div>
+            <div style="height:200px"><canvas id="chart-histogram"></canvas></div>
+          </div>
+
+          <!-- Pie Chart -->
+          <div class="glass rounded-2xl p-5 card-hover">
+            <div class="flex items-center gap-2 mb-3">
+              <iconify-icon icon="lucide:pie-chart" width="16" style="color:#34d399"></iconify-icon>
+              <h4 class="text-white/80 text-sm font-semibold">Program Funding Share</h4>
+            </div>
+            <div style="height:200px"><canvas id="chart-pie"></canvas></div>
+          </div>
+
+          <!-- Line Graph -->
+          <div class="glass rounded-2xl p-5 card-hover">
+            <div class="flex items-center gap-2 mb-3">
+              <iconify-icon icon="lucide:trending-up" width="16" style="color:#f59e0b"></iconify-icon>
+              <h4 class="text-white/80 text-sm font-semibold">Funds Over Time (Trend)</h4>
+            </div>
+            <div style="height:200px"><canvas id="chart-line"></canvas></div>
+          </div>
+
+          <!-- Bar Chart -->
+          <div class="glass rounded-2xl p-5 card-hover">
+            <div class="flex items-center gap-2 mb-3">
+              <iconify-icon icon="lucide:bar-chart-3" width="16" style="color:#a78bfa"></iconify-icon>
+              <h4 class="text-white/80 text-sm font-semibold">Impact Score Comparison</h4>
+            </div>
+            <div style="height:200px"><canvas id="chart-bar"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-number">4 / 6</div>
+  </div>
+</div>
+
+<!-- ===================== SLIDE 5: EFFICIENCY & FINDINGS ===================== -->
+<div class="slide" id="slide-4">
+  <div class="w-full h-full flex flex-col lg:flex-row" style="background:radial-gradient(ellipse at 70% 30%, rgba(16,185,129,0.08), transparent 50%), #081629;">
+    <!-- LEFT: Scatter + Efficiency -->
+    <div class="flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-14 py-12">
+      <div class="fade-in">
+        <div class="flex items-center gap-2 mb-3">
+          <iconify-icon icon="lucide:scatter-chart" width="16" style="color:#34d399"></iconify-icon>
+          <span class="text-emerald-400/70 text-xs font-semibold uppercase tracking-widest">Efficiency Analysis</span>
+        </div>
+        <h3 class="font-serif text-xl sm:text-2xl font-bold text-white mb-5 tracking-tight">Impact per Dollar</h3>
+        <div class="glass rounded-2xl p-5 mb-5">
+          <div style="height:240px"><canvas id="chart-scatter"></canvas></div>
+        </div>
+        <p class="text-white/35 text-xs text-center">Each bubble = a program · Size = beneficiaries · Higher Y = more efficient</p>
+      </div>
+    </div>
+
+    <!-- RIGHT: Top vs Bottom + Insights -->
+    <div class="flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-14 py-12">
+      <div class="fade-in space-y-5">
+        <!-- Top Programs -->
+        <div class="glass rounded-2xl p-5">
+          <div class="flex items-center gap-2 mb-4">
+            <iconify-icon icon="lucide:trophy" width="16" style="color:#34d399"></iconify-icon>
+            <h4 class="text-white/80 text-sm font-semibold">Top Performing Programs</h4>
+          </div>
+          <div class="space-y-2.5">
+            <div class="flex items-center gap-3 p-2.5 rounded-lg" style="background:rgba(16,185,129,0.08);">
+              <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs font-bold">1</div>
+              <span class="text-white/70 text-sm flex-1">Clean Water Access</span>
+              <span class="text-emerald-400 text-xs font-semibold">Eff: 0.0042</span>
+            </div>
+            <div class="flex items-center gap-3 p-2.5 rounded-lg" style="background:rgba(16,185,129,0.05);">
+              <div class="w-6 h-6 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-400 text-xs font-bold">2</div>
+              <span class="text-white/70 text-sm flex-1">Vocational Training</span>
+              <span class="text-emerald-400 text-xs font-semibold">Eff: 0.0038</span>
+            </div>
+            <div class="flex items-center gap-3 p-2.5 rounded-lg" style="background:rgba(16,185,129,0.03);">
+              <div class="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xs font-bold">3</div>
+              <span class="text-white/70 text-sm flex-1">Child Education</span>
+              <span class="text-emerald-400 text-xs font-semibold">Eff: 0.0035</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Programs -->
+        <div class="glass rounded-2xl p-5">
+          <div class="flex items-center gap-2 mb-4">
+            <iconify-icon icon="lucide:alert-circle" width="16" style="color:#f87171"></iconify-icon>
+            <h4 class="text-white/80 text-sm font-semibold">Underperforming Programs</h4>
+          </div>
+          <div class="space-y-2.5">
+            <div class="flex items-center gap-3 p-2.5 rounded-lg" style="background:rgba(239,68,68,0.06);">
+              <div class="w-6 h-6 rounded-full bg-red-500/15 flex items-center justify-center text-red-400 text-xs font-bold">!</div>
+              <span class="text-white/70 text-sm flex-1">Infrastructure Build</span>
+              <span class="text-red-400 text-xs font-semibold">Eff: 0.0008</span>
+            </div>
+            <div class="flex items-center gap-3 p-2.5 rounded-lg" style="background:rgba(239,68,68,0.04);">
+              <div class="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 text-xs font-bold">!</div>
+              <span class="text-white/70 text-sm flex-1">Admin Overhead</span>
+              <span class="text-red-400 text-xs font-semibold">Eff: 0.0003</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Insight -->
+        <div class="rounded-2xl p-4 pulse-glow" style="background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(16,185,129,0.1)); border:1px solid rgba(59,130,246,0.2);">
+          <div class="flex items-start gap-2">
+            <iconify-icon icon="lucide:lightbulb" width="16" style="color:#fbbf24; margin-top:2px"></iconify-icon>
+            <p class="text-white/70 text-xs leading-relaxed"><span class="text-white font-semibold">Key Insight:</span> Redirecting 15% funds from low-efficiency programs to top performers could increase overall impact by ~28%</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-number">5 / 6</div>
+  </div>
+</div>
+
+<!-- ===================== SLIDE 6: CONCLUSION & FUTURE ===================== -->
+<div class="slide" id="slide-5">
+  <div class="w-full h-full flex flex-col" style="background:radial-gradient(ellipse at 50% 50%, rgba(59,130,246,0.1), rgba(16,185,129,0.06), transparent 70%), #081629;">
+    <div class="flex-1 flex flex-col justify-start px-6 sm:px-12 lg:px-20 pt-24 pb-16 overflow-y-auto">
+      <div class="fade-in max-w-5xl mx-auto w-full">
+        <div class="text-center mb-10">
+          <span class="text-blue-400/70 text-xs font-semibold uppercase tracking-widest">Conclusion & Beyond</span>
+          <h2 class="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-white mt-2 tracking-tight">
+            Real-World Impact & <span class="gradient-text">Future Scope</span>
+          </h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          <div class="glass rounded-2xl p-6 text-center card-hover">
+            <div class="w-12 h-12 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background:linear-gradient(135deg,rgba(59,130,246,0.15),rgba(59,130,246,0.05));">
+              <iconify-icon icon="lucide:heart" width="22" style="color:#60a5fa"></iconify-icon>
+            </div>
+            <h4 class="text-white font-semibold text-sm mb-2">Better Lives</h4>
+            <p class="text-white/40 text-xs leading-relaxed">Optimized funds = more meals, more education, more healthcare for those who need it most</p>
+          </div>
+          <div class="glass rounded-2xl p-6 text-center card-hover">
+            <div class="w-12 h-12 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05));">
+              <iconify-icon icon="lucide:shield-check" width="22" style="color:#34d399"></iconify-icon>
+            </div>
+            <h4 class="text-white font-semibold text-sm mb-2">Donor Trust</h4>
+            <p class="text-white/40 text-xs leading-relaxed">Transparent, data-backed reports increase donor confidence and long-term funding</p>
+          </div>
+          <div class="glass rounded-2xl p-6 text-center card-hover">
+            <div class="w-12 h-12 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.05));">
+              <iconify-icon icon="lucide:scale" width="22" style="color:#f59e0b"></iconify-icon>
+            </div>
+            <h4 class="text-white font-semibold text-sm mb-2">Fair Allocation</h4>
+            <p class="text-white/40 text-xs leading-relaxed">Eliminates bias — every program judged by measurable outcomes, not politics</p>
+          </div>
+        </div>
+
+        <!-- Future Scope -->
+        <div class="glass rounded-2xl p-6 mb-8">
+          <div class="flex items-center gap-3 mb-5">
+            <div class="icon-box" style="background:linear-gradient(135deg,rgba(59,130,246,0.15),rgba(168,85,247,0.15));">
+              <iconify-icon icon="lucide:rocket" width="20" style="color:#a78bfa"></iconify-icon>
+            </div>
+            <h3 class="text-white font-semibold text-base">Future Scope</h3>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+              <iconify-icon icon="lucide:brain" width="24" style="color:#60a5fa" class="mb-2"></iconify-icon>
+              <p class="text-white/70 text-xs font-medium">AI-Based Recommendations</p>
+              <p class="text-white/30 text-xs mt-1">Auto-suggest fund redistribution</p>
+            </div>
+            <div class="p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+              <iconify-icon icon="lucide:trending-up" width="24" style="color:#34d399" class="mb-2"></iconify-icon>
+              <p class="text-white/70 text-xs font-medium">Predictive Analysis</p>
+              <p class="text-white/30 text-xs mt-1">Forecast future program outcomes</p>
+            </div>
+            <div class="p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+              <iconify-icon icon="lucide:map" width="24" style="color:#f59e0b" class="mb-2"></iconify-icon>
+              <p class="text-white/70 text-xs font-medium">Geo-Spatial Mapping</p>
+              <p class="text-white/30 text-xs mt-1">Region-wise gap identification</p>
+            </div>
+            <div class="p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+              <iconify-icon icon="lucide:smartphone" width="24" style="color:#a78bfa" class="mb-2"></iconify-icon>
+              <p class="text-white/70 text-xs font-medium">Real-Time Dashboard</p>
+              <p class="text-white/30 text-xs mt-1">Live monitoring for field teams</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Closing -->
+        <div class="text-center">
+          <div class="inline-flex items-center gap-3 px-6 py-3 rounded-full" style="background:linear-gradient(135deg,rgba(59,130,246,0.12),rgba(16,185,129,0.12)); border:1px solid rgba(59,130,246,0.2);">
+            <iconify-icon icon="lucide:sparkles" width="18" style="color:#fbbf24"></iconify-icon>
+            <span class="text-white/80 text-sm font-medium">Data has the power to turn good intentions into great impact</span>
+            <iconify-icon icon="lucide:sparkles" width="18" style="color:#fbbf24"></iconify-icon>
+          </div>
+          <p class="text-white/25 text-xs mt-6">Thank you · Questions?</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide-number">6 / 6</div>
+  </div>
+</div>
+
+<!-- ===================== SPEAKER NOTES PANEL ===================== -->
+<div class="notes-panel" id="notes-panel">
+  <div class="px-6 py-4" style="background:linear-gradient(180deg,rgba(8,22,41,0.98),rgba(15,36,64,0.98)); border-top:1px solid rgba(59,130,246,0.2); backdrop-filter:blur(20px);">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-blue-400/60 text-xs font-semibold uppercase tracking-widest flex items-center gap-2">
+        <iconify-icon icon="lucide:message-square" width="12"></iconify-icon> Speaker Notes
+      </span>
+      <button onclick="toggleNotes()" class="text-white/30 hover:text-white/60 transition-colors">
+        <iconify-icon icon="lucide:x" width="14"></iconify-icon>
+      </button>
+    </div>
+    <p class="text-white/50 text-sm leading-relaxed" id="notes-text">Click through slides to see speaker notes here.</p>
+  </div>
+</div>
+
+<script>
+// ========== SLIDE MANAGEMENT ==========
+let currentSlide = 0;
+const totalSlides = 6;
+
+const speakerNotes = [
+  `<strong>Slide 1 — Title</strong><br>Welcome everyone. Today we present our project on analyzing NGO welfare programs for optimal resource allocation. The core idea is simple but powerful: use data analytics to help NGOs make smarter funding decisions. Instead of guessing where money should go, we use metrics and visualizations to identify which programs deliver the most impact per dollar. This is especially relevant for hackathons and social good initiatives.`,
+  
+  `<strong>Slide 2 — Problem & Objective</strong><br>Let's start with the problem. Most NGOs, especially smaller ones, allocate funds based on gut feeling, historical patterns, or donor preferences — not data. This leads to situations where some programs are overfunded while equally deserving ones starve. There's no standardized way to measure impact. On the right, our objective is to build a data-driven framework: evaluate programs using clear metrics (funds, beneficiaries, impact score), calculate efficiency ratios, create visualizations that tell the story, and ultimately rank programs so NGOs know exactly where to invest.`,
+  
+  `<strong>Slide 3 — Data & Methodology</strong><br>Here's our dataset structure. Each record represents a welfare program with fields like program name, funds allocated in dollars, number of beneficiaries, an impact score on a 1-10 scale, the geographic region, and a date. The three key metrics we derived are: Impact Score (a composite of outcome quality, reach, and sustainability), Efficiency (Impact Score divided by Funds — this is our core metric), and Cost per Beneficiary. Our cleaning pipeline handles missing values, removes duplicates, converts data types, treats outliers, and computes these derived metrics.`,
+  
+  `<strong>Slide 4 — Visualizations</strong><br>This is the heart of our analysis — five different visualization types. The histogram shows how funds are distributed across programs — you can see most programs fall in a certain range. The pie chart breaks down funding share by program type. The line graph reveals temporal trends — when funding spiked or dipped. The bar chart directly compares impact scores across programs. Together, these charts give a 360-degree view of the funding landscape. Each visualization serves a specific analytical purpose and together they enable data-driven decision making.`,
+  
+  `<strong>Slide 5 — Efficiency & Findings</strong><br>This is our most important slide. The scatter plot maps funds on the X-axis against efficiency on the Y-axis. Programs in the top-left quadrant are stars — low funding but high efficiency. The top three performers are Clean Water Access, Vocational Training, and Child Education. At the bottom, Infrastructure Build and Admin Overhead show poor efficiency — they consume large funds with minimal measurable impact. The key insight: simply redirecting 15% of funds from low-efficiency to high-efficiency programs could boost overall impact by approximately 28%. That's the power of data-driven reallocation.`,
+  
+  `<strong>Slide 6 — Conclusion & Future</strong><br>To summarize the real-world impact: optimized funding directly translates to better lives — more meals served, more children educated, more patients treated. It builds donor trust through transparency. And it ensures fairness by removing bias from allocation decisions. Looking ahead, we envision AI-based auto-recommendations that suggest fund redistribution, predictive models that forecast which programs will succeed, geo-spatial mapping to identify regional gaps, and real-time dashboards for field teams. Data has the power to turn good intentions into great impact. Thank you — I'm happy to take questions.`
+];
+
+function goToSlide(index) {
+  if (index < 0 || index >= totalSlides) return;
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.progress-dot').forEach(d => d.classList.remove('active'));
+  document.getElementById(`slide-${index}`).classList.add('active');
+  document.querySelectorAll('.progress-dot')[index].classList.add('active');
+  currentSlide = index;
+  document.getElementById('notes-text').innerHTML = speakerNotes[index];
+  
+  // Trigger animations
+  const fadeIns = document.getElementById(`slide-${index}`).querySelectorAll('.fade-in');
+  fadeIns.forEach(el => { el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''; });
+  
+  // Init charts on slide 3
+  if (index === 3) setTimeout(initCharts, 100);
+  if (index === 4) setTimeout(initScatterChart, 100);
+}
+
+function nextSlide() { goToSlide(currentSlide + 1); }
+function prevSlide() { goToSlide(currentSlide - 1); }
+
+function toggleNotes() {
+  document.getElementById('notes-panel').classList.toggle('open');
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+// Keyboard nav
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); nextSlide(); }
+  if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prevSlide(); }
+  if (e.key === 'n' || e.key === 'N') toggleNotes();
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+});
+
+// ========== CHARTS ==========
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: 'rgba(255,255,255,0.5)', font: { size: 10, family: 'Inter' } } } },
+  scales: {
+    x: { ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    y: { ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+  }
+};
+
+let chartsInitialized = false;
+function initCharts() {
+  if (chartsInitialized) return;
+  chartsInitialized = true;
+
+  // Histogram
+  new Chart(document.getElementById('chart-histogram'), {
+    type: 'bar',
+    data: {
+      labels: ['0-50K','50K-100K','100K-150K','150K-200K','200K-250K','250K+'],
+      datasets: [{
+        data: [4, 8, 12, 7, 5, 3],
+        backgroundColor: ['rgba(59,130,246,0.3)','rgba(59,130,246,0.4)','rgba(59,130,246,0.6)','rgba(59,130,246,0.5)','rgba(59,130,246,0.35)','rgba(59,130,246,0.25)'],
+        borderColor: 'rgba(59,130,246,0.6)', borderWidth: 1, borderRadius: 4
+      }]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: false } } }
+  });
+
+  // Pie
+  new Chart(document.getElementById('chart-pie'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Healthcare','Education','Water & Sanitation','Food Security','Shelter','Training'],
+      datasets: [{
+        data: [28, 22, 18, 15, 10, 7],
+        backgroundColor: ['rgba(59,130,246,0.7)','rgba(16,185,129,0.7)','rgba(245,158,11,0.7)','rgba(239,68,68,0.7)','rgba(168,85,247,0.7)','rgba(56,189,248,0.7)'],
+        borderColor: '#081629', borderWidth: 2
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'rgba(255,255,255,0.5)', font: { size: 9, family: 'Inter' }, padding: 8, boxWidth: 10 } } } }
+  });
+
+  // Line
+  new Chart(document.getElementById('chart-line'), {
+    type: 'line',
+    data: {
+      labels: ['Jan','Mar','May','Jul','Sep','Nov','Jan','Mar'],
+      datasets: [{
+        label: 'Total Funds ($K)',
+        data: [120, 145, 160, 135, 180, 210, 195, 240],
+        borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)',
+        tension: 0.4, fill: true, pointRadius: 3, pointBackgroundColor: '#f59e0b', borderWidth: 2
+      }]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: false } } }
+  });
+
+  // Bar
+  new Chart(document.getElementById('chart-bar'), {
+    type: 'bar',
+    data: {
+      labels: ['Water','Training','Education','Healthcare','Food','Shelter','Admin'],
+      datasets: [{
+        label: 'Impact Score',
+        data: [9.2, 8.8, 8.5, 7.8, 7.2, 6.5, 3.1],
+        backgroundColor: ctx => {
+          const v = ctx.parsed.y;
+          return v >= 8 ? 'rgba(16,185,129,0.6)' : v >= 6 ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.5)';
+        },
+        borderRadius: 4, borderWidth: 0
+      }]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: false } }, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, max: 10 } } }
+  });
+}
+
+let scatterInitialized = false;
+function initScatterChart() {
+  if (scatterInitialized) return;
+  scatterInitialized = true;
+
+  new Chart(document.getElementById('chart-scatter'), {
+    type: 'bubble',
+    data: {
+      datasets: [
+        { label: 'Clean Water', data: [{ x: 85, y: 9.2, r: 14 }], backgroundColor: 'rgba(16,185,129,0.6)', borderColor: 'rgba(16,185,129,0.8)', borderWidth: 1 },
+        { label: 'Training', data: [{ x: 120, y: 8.8, r: 11 }], backgroundColor: 'rgba(16,185,129,0.5)', borderColor: 'rgba(16,185,129,0.7)', borderWidth: 1 },
+        { label: 'Education', data: [{ x: 150, y: 8.5, r: 16 }], backgroundColor: 'rgba(16,185,129,0.4)', borderColor: 'rgba(16,185,129,0.6)', borderWidth: 1 },
+        { label: 'Healthcare', data: [{ x: 200, y: 7.8, r: 13 }], backgroundColor: 'rgba(59,130,246,0.5)', borderColor: 'rgba(59,130,246,0.7)', borderWidth: 1 },
+        { label: 'Food Security', data: [{ x: 110, y: 7.2, r: 18 }], backgroundColor: 'rgba(59,130,246,0.4)', borderColor: 'rgba(59,130,246,0.6)', borderWidth: 1 },
+        { label: 'Shelter', data: [{ x: 180, y: 6.5, r: 9 }], backgroundColor: 'rgba(245,158,11,0.5)', borderColor: 'rgba(245,158,11,0.7)', borderWidth: 1 },
+        { label: 'Infra', data: [{ x: 250, y: 4.2, r: 7 }], backgroundColor: 'rgba(239,68,68,0.4)', borderColor: 'rgba(239,68,68,0.6)', borderWidth: 1 },
+        { label: 'Admin', data: [{ x: 60, y: 2.1, r: 5 }], backgroundColor: 'rgba(239,68,68,0.3)', borderColor: 'rgba(239,68,68,0.5)', borderWidth: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: 'rgba(255,255,255,0.4)', font: { size: 8, family: 'Inter' }, padding: 6, boxWidth: 8 } } },
+      scales: {
+        x: { title: { display: true, text: 'Funds ($K)', color: 'rgba(255,255,255,0.3)', font: { size: 9 } }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 8 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { title: { display: true, text: 'Impact Score', color: 'rgba(255,255,255,0.3)', font: { size: 9 } }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 8 } }, grid: { color: 'rgba(255,255,255,0.04)' }, max: 10 }
+      }
+    }
+  });
+}
+
+// Init notes
+document.getElementById('notes-text').innerHTML = speakerNotes[0];
+</script>
+
+</body>
+</html>
